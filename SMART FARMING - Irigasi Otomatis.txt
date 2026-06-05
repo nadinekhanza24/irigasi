@@ -1,0 +1,74 @@
+// SMART FARMING - Irigasi Otomatis
+
+#include <DHT.h>
+#include <Servo.h>
+
+//PIN
+#define PIN_DHT        4
+#define PIN_SOIL       A0
+#define PIN_SERVO      9
+#define PIN_LED_HIJAU  5
+#define PIN_LED_KUNING 6
+#define PIN_LED_MERAH  7
+
+//ambang batas
+#define SOIL_BATAS     500   
+#define SUHU_BATAS     31    
+
+DHT   dht(PIN_DHT, DHT11);
+Servo servo;
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  servo.attach(PIN_SERVO);
+
+  pinMode(PIN_LED_HIJAU,  OUTPUT);
+  pinMode(PIN_LED_KUNING, OUTPUT);
+  pinMode(PIN_LED_MERAH,  OUTPUT);
+
+  servo.write(0);
+  Serial.println("Sistem siap. Servo posisi tutup (0 deg)");
+  delay(1000);
+}
+
+void loop() {
+  int   soil = analogRead(PIN_SOIL);
+  float suhu = dht.readTemperature();
+
+  // Konversi ke kondisi boolean
+  bool tanahKering = (soil > SOIL_BATAS);
+  bool suhuPanas   = (suhu > SUHU_BATAS);
+
+  //Untuk menampilkan di serial monitor
+  Serial.print("Soil: "); Serial.print(soil);
+  Serial.print(tanahKering ? " (KERING)" : " (BASAH)");
+  Serial.print(" | Suhu: "); Serial.print(suhu);
+  Serial.println(suhuPanas ? " C (PANAS)" : " C (NORMAL)");
+
+  // Matikan semua LED di tiap awal proses
+  digitalWrite(PIN_LED_HIJAU,  LOW);
+  digitalWrite(PIN_LED_KUNING, LOW);
+  digitalWrite(PIN_LED_MERAH,  LOW);
+
+  // Logika utama program
+  if (!tanahKering && !suhuPanas) {
+    //kondisi aman (lampu hijau)
+    digitalWrite(PIN_LED_HIJAU, HIGH);
+    servo.write(0);
+    Serial.println("Level 1 - NORMAL | Servo 0 deg");
+    //kondisi kering (lampu merah)
+  } else if (tanahKering && suhuPanas) {
+    digitalWrite(PIN_LED_MERAH, HIGH);
+    servo.write(90);
+    Serial.println("Level 3 - KRITIS | Servo 90 deg");
+    //kondisi siaga (lampu kuning)
+  } else {
+    digitalWrite(PIN_LED_KUNING, HIGH);
+    servo.write(45);
+    Serial.println("Level 2 - SIAGA  | Servo 45 deg");
+  }
+
+  Serial.println("");
+  delay(2000);
+}
