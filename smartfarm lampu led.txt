@@ -1,0 +1,90 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+// --- Konfigurasi Pin ---
+#define LDR_PIN A0          // Pin Analog untuk Sensor Cahaya LDR
+#define DHT_PIN 2           // Pin Digital untuk Sensor DHT11
+#define LED_LAMPU 3         // Pin Digital untuk Aktuator LED (Lampu)
+
+// --- Konfigurasi Sensor & LCD ---
+#define DHTTYPE DHT11       // Menentukan tipe sensor yaitu DHT11
+DHT dht(DHT_PIN, DHTTYPE);
+
+// Alamat I2C LCD biasanya 0x27 atau 0x3F, dengan ukuran 16x2
+LiquidCrystal_I2C lcd(0x27, 16, 2); 
+
+// --- Batas Ambang (Threshold) ---
+const int batasGelap = 400; // Sesuaikan nilai ini (0 - 1023) tergantung kondisi kandang
+
+void setup() {
+  // Inisialisasi Serial Monitor untuk debugging
+  Serial.begin(9600);
+
+  // Inisialisasi Sensor DHT dan LCD
+  dht.begin();
+  lcd.init();
+  lcd.backlight();
+
+  // Konfigurasi Pin Mode
+  pinMode(LED_LAMPU, OUTPUT);
+  pinMode(LDR_PIN, INPUT);
+
+  // Tampilan Awal (Welcome Screen)
+  lcd.setCursor(0, 0);
+  lcd.print("  SMART FARMING ");
+  lcd.setCursor(0, 1);
+  lcd.print("   INITIALIZING ");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  // 1. Membaca Data dari Sensor
+  float kelembapan = dht.readHumidity();
+  float suhu = dht.readTemperature();
+  int nilaiLDR = analogRead(LDR_PIN); // Membaca intensitas cahaya (0 = sangat terang, 1023 = sangat gelap)
+
+  // Validasi jika sensor DHT error/tidak terbaca
+  if (isnan(kelembapan) || isnan(suhu)) {
+    Serial.println("Gagal membaca dari sensor DHT!");
+    lcd.setCursor(0, 0);
+    lcd.print("Error Sensor DHT");
+    return; 
+  }
+
+  // 2. Logika Aktuator Lampu Otomatis (LDR)
+  // Catatan: Pada modul LDR standar, semakin gelap lingkungan, nilai analognya semakin TINGGI.
+  if (nilaiLDR > batasGelap) {
+    digitalWrite(LED_LAMPU, HIGH); // Lampu Menyala
+  } else {
+    digitalWrite(LED_LAMPU, LOW);  // Lampu Mati
+  }
+
+  // 3. Menampilkan Data ke Serial Monitor (Opsional untuk Pantauan Laptop)
+  Serial.print("Suhu: "); Serial.print(suhu); Serial.print("C | ");
+  Serial.print("Lembab: "); Serial.print(kelembapan); Serial.print("% | ");
+  Serial.print("LDR: "); Serial.println(nilaiLDR);
+
+  // 4. Menampilkan Data ke Layar LCD 16x2
+  // Baris 1: Suhu dan Kelembapan
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  lcd.print((int)suhu); // Konversi ke int agar tampilan lebih ringkas
+  lcd.print("C ");
+
+  lcd.print("H:");
+  lcd.print((int)kelembapan);
+  lcd.print("%   "); // Spasi tambahan untuk menghapus sisa karakter sebelumnya
+
+  // Baris 2: Status Lampu/Cahaya
+  lcd.setCursor(0, 1);
+  if (nilaiLDR > batasGelap) {
+    lcd.print("Lampu: ON (Gelap)");
+  } else {
+    lcd.print("Lampu: OFF(Terg)");
+  }
+
+  // Delay refresh data setiap 1,5 detik
+  delay(1500);
+}
