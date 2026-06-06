@@ -1,0 +1,105 @@
+#define BLYNK_TEMPLATE_ID "TMPL66DnfjZN2"
+#define BLYNK_TEMPLATE_NAME "Rain dan LDR"
+#define BLYNK_AUTH_TOKEN    "ljOvSS75rjcFe4nN3nNnr3lswKhfAfTr"
+
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <Servo.h>
+
+char auth[] = BLYNK_AUTH_TOKEN;
+char ssid[] = "ure";     
+char pass[] = "apala010"; 
+
+const int pinHujan  = D5;
+const int pinLDR    = A0;
+const int pinServo  = D4;
+const int pinBuzzer = D3;
+
+Servo myservo;
+BlynkTimer timer;
+
+const int batasTerang  = 200; 
+const int batasMendung = 350; 
+bool statusBuzzer = false; 
+
+void kirimDataSensor() {
+  int statusHujan = digitalRead(pinHujan);
+  int nilaiLDR = analogRead(pinLDR);
+
+  if (statusHujan == LOW) {
+    Blynk.virtualWrite(V1, 500);  
+  } else {
+    Blynk.virtualWrite(V1, 4095); 
+  }
+
+  if (statusHujan == LOW) {
+    myservo.write(0);
+    statusBuzzer = !statusBuzzer;
+    if (statusBuzzer) {
+      tone(pinBuzzer, 1000);
+    } else {
+      noTone(pinBuzzer);
+    }
+    if (nilaiLDR < batasTerang) {
+      Blynk.virtualWrite(V2, "Hujan Siang (Jemuran Masuk)");
+    } else {
+      Blynk.virtualWrite(V2, "Hujan Malam (Jemuran Masuk)");
+    }
+  } else {
+    noTone(pinBuzzer);
+    statusBuzzer = false;
+    if (nilaiLDR < batasTerang) {
+      myservo.write(90);
+      Blynk.virtualWrite(V2, "Cerah (Jemuran Keluar)");
+    } else if (nilaiLDR >= batasTerang && nilaiLDR <= batasMendung) {
+      myservo.write(90);
+      Blynk.virtualWrite(V2, "Mendung (Jemuran Keluar)");
+    } else {
+      myservo.write(0);
+      Blynk.virtualWrite(V2, "Malam (Jemuran Masuk)");
+    }
+  }
+
+  Blynk.virtualWrite(V0, nilaiLDR); 
+
+  Serial.print("Hujan: "); Serial.print(statusHujan);
+  Serial.print(" | LDR: "); Serial.print(nilaiLDR);
+  Serial.print(" | Buzzer: "); Serial.println(statusBuzzer);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("=== BOOTING ===");
+
+  pinMode(pinHujan, INPUT_PULLUP);
+  pinMode(pinBuzzer, OUTPUT);
+  noTone(pinBuzzer);
+  myservo.attach(pinServo);
+  myservo.write(0);
+
+  Serial.println("Konek WiFi...");
+  WiFi.begin(ssid, pass);
+
+  int retry = 0;
+  while (WiFi.status() != WL_CONNECTED && retry < 20) {
+    delay(500);
+    Serial.print(".");
+    retry++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi OK!");
+    Blynk.config(auth);
+    Blynk.connect();
+  } else {
+    Serial.println("\nWiFi GAGAL - mode offline, sensor tetap jalan");
+  }
+
+  timer.setInterval(1000L, kirimDataSensor);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
